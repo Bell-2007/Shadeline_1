@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atardecer Sereno</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #04030c;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sunsetCanvas"></canvas>
+
+  <script>
+    window.onload = function () {
+      const canvas = document.getElementById('sunsetCanvas');
+      const ctx = canvas.getContext('2d');
+
+      let width = 0;
+      let height = 0;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      // Elementos de la escena crepuscular nocturna
+      let stars = [];
+      let shootingStars = [];
+      let cloudLayers = [];
+      let waterGlints = [];
+      let coastalRidges = [];
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        initScene();
+      }
+
+      function initScene() {
+        const horizonY = height * 0.67;
+
+        // 1. Cielo estrellado denso y vibrante con distintos colores y brillos
+        stars = [];
+        const starCount = Math.min(520, Math.floor((width * horizonY) / 1850));
+        const starPalettes = [
+          { r: 255, g: 255, b: 255 }, // Blanco diamante
+          { r: 215, g: 235, b: 255 }, // Azul zafiro claro
+          { r: 255, g: 242, b: 212 }, // Dorado pálido
+          { r: 245, g: 220, b: 255 }  // Lavanda estelar
+        ];
+
+        for (let i = 0; i < starCount; i++) {
+          const yNorm = Math.pow(Math.random(), 1.25);
+          const y = yNorm * (horizonY * 0.94);
+          // Desvanecimiento muy suave cerca del resplandor del horizonte
+          const horizonFade = Math.min(1, (horizonY - y) / (horizonY * 0.22));
+          const isSuperBright = Math.random() < 0.11;
+          const isMediumBright = !isSuperBright && Math.random() < 0.24;
+          const palette = starPalettes[Math.floor(Math.random() * starPalettes.length)];
+
+          stars.push({
+            x: Math.random() * width,
+            y,
+            radius: isSuperBright
+              ? (Math.random() * 1.4 + 1.5)
+              : isMediumBright
+                ? (Math.random() * 0.9 + 0.95)
+                : (Math.random() * 0.75 + 0.35),
+            baseAlpha: (0.45 + Math.random() * 0.55) * (0.35 + horizonFade * 0.65),
+            phase: Math.random() * Math.PI * 2,
+            speed: Math.random() * 0.032 + 0.009,
+            color: palette,
+            isSuperBright,
+            isMediumBright,
+            spikeAngle: Math.random() * 0.25
+          });
+        }
+
+        shootingStars = [];
+
+        // 2. Nubes nocturnas suaves iluminadas tenuemente desde abajo por el ocaso residual
+        cloudLayers = [];
+        const layerConfigs = [
+          { count: 5, yMin: 0.16, yMax: 0.32, speed: 3.2, scale: 0.85, baseColor: [18, 12, 36], rimColor: [110, 56, 118], alpha: 0.5 },
+          { count: 6, yMin: 0.32, yMax: 0.52, speed: 5.5, scale: 1.15, baseColor: [24, 13, 42], rimColor: [186, 86, 112], alpha: 0.68 },
+          { count: 5, yMin: 0.50, yMax: 0.63, speed: 8.0, scale: 1.35, baseColor: [22, 11, 34], rimColor: [232, 138, 102], alpha: 0.78 }
+        ];
+
+        layerConfigs.forEach((cfg, layerIdx) => {
+          for (let i = 0; i < cfg.count; i++) {
+            const puffs = [];
+            const puffCount = Math.floor(Math.random() * 5) + 6;
+            const totalSpan = (Math.random() * 150 + 180) * cfg.scale;
+
+            for (let p = 0; p < puffCount; p++) {
+              const t = p / (puffCount - 1);
+              const arch = Math.sin(t * Math.PI);
+              puffs.push({
+                dx: (t - 0.5) * totalSpan + (Math.random() - 0.5) * 26,
+                dy: -arch * (Math.random() * 15 + 12) * cfg.scale + (Math.random() - 0.5) * 6,
+                rx: (Math.random() * 38 + 38) * cfg.scale * (0.65 + arch * 0.5),
+                ry: (Math.random() * 13 + 12) * cfg.scale * (0.6 + arch * 0.55)
+              });
+            }
+
+            cloudLayers.push({
+              layerIdx,
+              x: (i / cfg.count) * (width + 480) - 240 + (Math.random() - 0.5) * 130,
+              y: horizonY * (cfg.yMin + Math.random() * (cfg.yMax - cfg.yMin)),
+              speed: cfg.speed * (0.85 + Math.random() * 0.3),
+              baseColor: cfg.baseColor,
+              rimColor: cfg.rimColor,
+              alpha: cfg.alpha,
+              puffs,
+              span: totalSpan
+            });
+          }
+        });
+
+        // 3. Destellos suaves del resplandor crepuscular y reflejos de estrellas sobre el mar
+        waterGlints = [];
+        const glintCount = 175;
+        for (let i = 0; i < glintCount; i++) {
+          const depth = Math.pow(Math.random(), 1.2);
+          const isStarReflection = Math.random() < 0.52;
+          waterGlints.push({
+            depth,
+            xNorm: Math.random(),
+            offsetNorm: (Math.random() - 0.5) * 2,
+            spreadFactor: 0.08 + depth * 0.36,
+            width: isStarReflection ? (2.5 + depth * 9) : (10 + depth * 36),
+            height: isStarReflection ? (0.9 + depth * 1.4) : (1.0 + depth * 1.8),
+            phase: Math.random() * Math.PI * 2,
+            speed: 1.4 + Math.random() * 2.8,
+            isStarReflection
+          });
+        }
+
+        // 4. Silueta sutil de montañas/costa lejana en los extremos del horizonte
+        coastalRidges = [
+          generateRidge(0, width * 0.36, horizonY, 28, 18),
+          generateRidge(width * 0.66, width, horizonY, 24, 16)
+        ];
+      }
+
+      function generateRidge(startX, endX, baseY, maxHeight, segments) {
+        const points = [{ x: startX, y: baseY }];
+        for (let i = 1; i < segments; i++) {
+          const t = i / segments;
+          const x = startX + (endX - startX) * t;
+          const envelope = Math.sin(t * Math.PI);
+          const noise = Math.sin(t * 11.3) * 0.35 + Math.cos(t * 23.7) * 0.2 + 0.55;
+          const y = baseY - envelope * maxHeight * noise;
+          points.push({ x, y });
+        }
+        points.push({ x: endX, y: baseY });
+        return points;
+      }
+
+      // ==========================================================
+      // FUNCIONES DE DIBUJO POR CAPAS
+      // ==========================================================
+
+      function drawTwilightSky(horizonY, glowX, pulse) {
+        // Degradado de cielo nocturno con resplandor residual del ocaso ya oculto
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+        skyGrad.addColorStop(0.00, '#03030c'); // Azul medianoche profundo en el cenit
+        skyGrad.addColorStop(0.26, '#09091f'); // Azul noche estrellada
+        skyGrad.addColorStop(0.50, '#181036'); // Índigo violeta
+        skyGrad.addColorStop(0.70, '#36174a'); // Púrpura profundo
+        skyGrad.addColorStop(0.85, '#692452'); // Magenta tenue crepuscular
+        skyGrad.addColorStop(0.95, '#b24b58'); // Rosado cálido residual
+        skyGrad.addColorStop(1.00, '#e38759'); // Sutil brillo ámbar en el horizonte
+
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, width, horizonY + 2);
+
+        // Resplandor difuso donde se escondió el sol bajo el horizonte (sin disco solar)
+        const afterglowRadius = Math.max(width, height) * (0.55 + pulse * 0.02);
+        const afterglow = ctx.createRadialGradient(
+          glowX, horizonY + 18, 5,
+          glowX, horizonY + 18, afterglowRadius
+        );
+        afterglow.addColorStop(0.00, 'rgba(255, 178, 112, 0.36)');
+        afterglow.addColorStop(0.22, 'rgba(224, 96, 114, 0.22)');
+        afterglow.addColorStop(0.52, 'rgba(104, 38, 108, 0.10)');
+        afterglow.addColorStop(1.00, 'rgba(20, 12, 45, 0)');
+
+        ctx.fillStyle = afterglow;
+        ctx.fillRect(0, 0, width, horizonY);
+
+        // Franja sutil nebulosa de la Vía Láctea cruzando diagonalmente el cielo
+        ctx.save();
+        ctx.translate(width * 0.48, horizonY * 0.34);
+        ctx.rotate(-0.42);
+        const milkyWayGrad = ctx.createLinearGradient(0, -height * 0.22, 0, height * 0.22);
+        milkyWayGrad.addColorStop(0.00, 'rgba(130, 155, 235, 0)');
+        milkyWayGrad.addColorStop(0.35, 'rgba(155, 175, 245, 0.045)');
+        milkyWayGrad.addColorStop(0.50, 'rgba(210, 195, 255, 0.075)');
+        milkyWayGrad.addColorStop(0.65, 'rgba(155, 175, 245, 0.045)');
+        milkyWayGrad.addColorStop(1.00, 'rgba(130, 155, 235, 0)');
+
+        ctx.fillStyle = milkyWayGrad;
+        ctx.fillRect(-width, -height * 0.24, width * 2, height * 0.48);
+        ctx.restore();
+      }
+
+      function spawnShootingStar(horizonY) {
+        if (shootingStars.length < 2 && Math.random() < 0.012) {
+          const startFromLeft = Math.random() < 0.65;
+          shootingStars.push({
+            x: startFromLeft ? Math.random() * width * 0.75 : width * (0.25 + Math.random() * 0.7),
+            y: Math.random() * horizonY * 0.42,
+            len: Math.random() * 110 + 75,
+            speed: Math.random() * 480 + 420,
+            angle: startFromLeft
+              ? (Math.PI * 0.14 + Math.random() * 0.14)
+              : (Math.PI * 0.72 + Math.random() * 0.14),
+            alpha: 1
+          });
+        }
+      }
+
+      function drawStarsMoonAndMeteors(time, dt, horizonY) {
+        // 1. Estrellas brillantes con halos y destellos en cruz (diffraction spikes)
+        for (const s of stars) {
+          const twinkle = 0.62 + 0.38 * Math.sin(time * s.speed * 60 + s.phase);
+          const alpha = Math.max(0.08, Math.min(1, s.baseAlpha * twinkle));
+          const { r, g, b } = s.color;
+
+          // Halo luminoso para estrellas medianas y súper brillantes
+          if (s.isSuperBright || s.isMediumBright) {
+            const haloRadius = s.radius * (s.isSuperBright ? 6.5 : 4.0);
+            const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, haloRadius);
+            halo.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.65})`);
+            halo.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${alpha * 0.22})`);
+            halo.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = halo;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, haloRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Núcleo estelar
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Destellos en cruz (diffraction spikes) en las estrellas más brillantes
+          if (s.isSuperBright) {
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            ctx.rotate(s.spikeAngle);
+
+            const mainLen = s.radius * (6.2 + twinkle * 2.8);
+            const diagLen = mainLen * 0.42;
+
+            // Cruz principal
+            const spikeGradH = ctx.createLinearGradient(-mainLen, 0, mainLen, 0);
+            spikeGradH.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+            spikeGradH.addColorStop(0.5, `rgba(255, 255, 255, ${alpha * 0.92})`);
+            spikeGradH.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.strokeStyle = spikeGradH;
+            ctx.lineWidth = 1.25;
+            ctx.beginPath();
+            ctx.moveTo(-mainLen, 0);
+            ctx.lineTo(mainLen, 0);
+            ctx.stroke();
+
+            const spikeGradV = ctx.createLinearGradient(0, -mainLen, 0, mainLen);
+            spikeGradV.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+            spikeGradV.addColorStop(0.5, `rgba(255, 255, 255, ${alpha * 0.92})`);
+            spikeGradV.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.strokeStyle = spikeGradV;
+            ctx.beginPath();
+            ctx.moveTo(0, -mainLen);
+            ctx.lineTo(0, mainLen);
+            ctx.stroke();
+
+            // Destellos diagonales sutiles
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.42})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-diagLen, -diagLen);
+            ctx.lineTo(diagLen, diagLen);
+            ctx.moveTo(-diagLen, diagLen);
+            ctx.lineTo(diagLen, -diagLen);
+            ctx.stroke();
+
+            ctx.restore();
+          } else if (s.isMediumBright && alpha > 0.45) {
+            const len = s.radius * 3.6;
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.55})`;
+            ctx.lineWidth = 0.85;
+            ctx.beginPath();
+            ctx.moveTo(s.x - len, s.y);
+            ctx.lineTo(s.x + len, s.y);
+            ctx.moveTo(s.x, s.y - len);
+            ctx.lineTo(s.x, s.y + len);
+            ctx.stroke();
+          }
+        }
+
+        // 2. Estrellas fugaces ocasionales
+        spawnShootingStar(horizonY);
+        for (let i = shootingStars.length - 1; i >= 0; i--) {
+          const m = shootingStars[i];
+          const tailX = m.x - Math.cos(m.angle) * m.len;
+          const tailY = m.y - Math.sin(m.angle) * m.len;
+
+          const meteorGrad = ctx.createLinearGradient(m.x, m.y, tailX, tailY);
+          meteorGrad.addColorStop(0, `rgba(255, 255, 255, ${m.alpha})`);
+          meteorGrad.addColorStop(0.35, `rgba(210, 232, 255, ${m.alpha * 0.55})`);
+          meteorGrad.addColorStop(1, 'rgba(180, 210, 255, 0)');
+
+          ctx.strokeStyle = meteorGrad;
+          ctx.lineWidth = 1.8;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(m.x, m.y);
+          ctx.lineTo(tailX, tailY);
+          ctx.stroke();
+
+          // Punto brillante en la cabeza de la estrella fugaz
+          ctx.fillStyle = `rgba(255, 255, 255, ${m.alpha})`;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+
+          m.x += Math.cos(m.angle) * m.speed * dt;
+          m.y += Math.sin(m.angle) * m.speed * dt;
+          m.alpha -= dt * 1.15;
+
+          if (m.alpha <= 0 || m.y > horizonY * 0.85 || m.x < -150 || m.x > width + 150) {
+            shootingStars.splice(i, 1);
+          }
+        }
+
+        // 3. Luna creciente luminosa en la parte alta del cielo
+        const moonX = width * 0.80;
+        const moonY = horizonY * 0.21;
+        const moonR = Math.min(width, height) * 0.025;
+
+        ctx.save();
+        const moonHalo = ctx.createRadialGradient(moonX, moonY, moonR * 0.4, moonX, moonY, moonR * 4.5);
+        moonHalo.addColorStop(0, 'rgba(255, 250, 232, 0.28)');
+        moonHalo.addColorStop(0.45, 'rgba(215, 228, 255, 0.10)');
+        moonHalo.addColorStop(1, 'rgba(215, 228, 255, 0)');
+        ctx.fillStyle = moonHalo;
+        ctx.beginPath();
+        ctx.arc(moonX, moonY, moonR * 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.translate(moonX, moonY);
+        ctx.rotate(-0.38);
+        ctx.beginPath();
+        ctx.arc(0, 0, moonR, -Math.PI * 0.5, Math.PI * 0.5, false);
+        ctx.bezierCurveTo(moonR * 0.34, moonR * 0.46, moonR * 0.34, -moonR * 0.46, 0, -moonR);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 252, 238, 0.94)';
+        ctx.shadowColor = 'rgba(255, 248, 215, 0.75)';
+        ctx.shadowBlur = 14;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawClouds(dt, glowX, horizonY) {
+        for (const cloud of cloudLayers) {
+          cloud.x += cloud.speed * dt;
+          if (cloud.x - cloud.span > width + 180) {
+            cloud.x = -cloud.span - 180;
+          }
+
+          const distToGlow = Math.hypot(cloud.x - glowX, cloud.y - horizonY);
+          const glowProximity = Math.max(0, 1 - distToGlow / (width * 0.65));
+
+          ctx.save();
+          ctx.globalAlpha = cloud.alpha;
+
+          // Borde inferior tenuemente iluminado por la luz residual del horizonte
+          const dirX = ((glowX - cloud.x) / Math.max(width, 1)) * 8;
+          const dirY = 4;
+
+          ctx.fillStyle = `rgba(${cloud.rimColor[0]}, ${cloud.rimColor[1]}, ${cloud.rimColor[2]}, ${0.32 + glowProximity * 0.45})`;
+          ctx.beginPath();
+          for (const p of cloud.puffs) {
+            ctx.moveTo(cloud.x + p.dx + dirX + p.rx, cloud.y + p.dy + dirY);
+            ctx.ellipse(cloud.x + p.dx + dirX, cloud.y + p.dy + dirY, p.rx * 1.03, p.ry * 1.04, 0, 0, Math.PI * 2);
+          }
+          ctx.fill();
+
+          // Cuerpo nocturno suave de la nube
+          const cloudGrad = ctx.createLinearGradient(cloud.x, cloud.y - 34, cloud.x, cloud.y + 20);
+          cloudGrad.addColorStop(0, `rgb(${cloud.baseColor[0]}, ${cloud.baseColor[1]}, ${cloud.baseColor[2]})`);
+          cloudGrad.addColorStop(0.78, `rgb(${cloud.baseColor[0] + 18}, ${cloud.baseColor[1] + 12}, ${cloud.baseColor[2] + 22})`);
+          cloudGrad.addColorStop(1, `rgb(${cloud.rimColor[0]}, ${cloud.rimColor[1]}, ${cloud.rimColor[2]})`);
+
+          ctx.fillStyle = cloudGrad;
+          ctx.beginPath();
+          for (const p of cloud.puffs) {
+            ctx.moveTo(cloud.x + p.dx + p.rx, cloud.y + p.dy);
+            ctx.ellipse(cloud.x + p.dx, cloud.y + p.dy, p.rx, p.ry, 0, 0, Math.PI * 2);
+          }
+          ctx.fill();
+
+          ctx.restore();
+        }
+      }
+
+      function drawCoastalSilhouettes(horizonY) {
+        ctx.save();
+        for (const ridge of coastalRidges) {
+          const ridgeGrad = ctx.createLinearGradient(0, horizonY - 28, 0, horizonY);
+          ridgeGrad.addColorStop(0, 'rgba(18, 9, 28, 0.82)');
+          ridgeGrad.addColorStop(1, 'rgba(8, 5, 16, 0.96)');
+
+          ctx.fillStyle = ridgeGrad;
+          ctx.beginPath();
+          ctx.moveTo(ridge[0].x, horizonY);
+          for (let i = 1; i < ridge.length; i++) {
+            ctx.lineTo(ridge[i].x, ridge[i].y);
+          }
+          ctx.lineTo(ridge[ridge.length - 1].x, horizonY);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawOcean(time, horizonY, glowX, pulse) {
+        const waterHeight = height - horizonY;
+
+        // 1. Mar oscuro reflejando el crepúsculo nocturno
+        const waterGrad = ctx.createLinearGradient(0, horizonY, 0, height);
+        waterGrad.addColorStop(0.00, '#9e4652'); // Reflejo rosado/ámbar tenue en el horizonte
+        waterGrad.addColorStop(0.14, '#4a1c42'); // Magenta oscuro
+        waterGrad.addColorStop(0.36, '#1e1036'); // Púrpura nocturno
+        waterGrad.addColorStop(0.68, '#0b0820'); // Azul medianoche profundo
+        waterGrad.addColorStop(1.00, '#04030e'); // Oscuridad serena en primer plano
+
+        ctx.fillStyle = waterGrad;
+        ctx.fillRect(0, horizonY, width, waterHeight);
+
+        // 2. Reflejo difuso del resplandor residual del ocaso
+        const afterglowWater = ctx.createRadialGradient(
+          glowX, horizonY + waterHeight * 0.08, 10,
+          glowX, horizonY + waterHeight * 0.35, width * 0.34
+        );
+        afterglowWater.addColorStop(0.00, 'rgba(235, 138, 96, 0.28)');
+        afterglowWater.addColorStop(0.45, 'rgba(145, 58, 96, 0.12)');
+        afterglowWater.addColorStop(1.00, 'rgba(20, 12, 42, 0)');
+
+        ctx.fillStyle = afterglowWater;
+        ctx.fillRect(0, horizonY, width, waterHeight);
+
+        // 3. Ondas horizontales serenas
+        const waveRows = 36;
+        for (let i = 0; i < waveRows; i++) {
+          const t = Math.pow(i / waveRows, 1.55);
+          const y = horizonY + t * waterHeight;
+          const waveSpeed = 0.65 + t * 1.25;
+          const waveOffset = Math.sin(time * waveSpeed + i * 0.9) * (5 + t * 14);
+          const alpha = 0.04 + (1 - t) * 0.08;
+
+          ctx.strokeStyle = i % 2 === 0
+            ? `rgba(215, 155, 165, ${alpha})`
+            : `rgba(8, 5, 20, ${alpha * 1.4})`;
+          ctx.lineWidth = 1 + t * 1.5;
+
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          for (let x = 0; x <= width; x += 65) {
+            const rippleY = y + Math.sin(x * 0.014 + time * 1.1 + i) * (0.5 + t * 1.4);
+            ctx.lineTo(x + waveOffset * 0.2, rippleY);
+          }
+          ctx.stroke();
+        }
+
+        // 4. Reflejos titilantes de las estrellas y del ocaso sobre el agua
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        for (const g of waterGlints) {
+          const y = horizonY + 3 + g.depth * (waterHeight - 6);
+          const shimmer = Math.sin(time * g.speed + g.phase);
+          if (shimmer < -0.15) continue;
+
+          const intensity = (shimmer + 0.15) / 1.15;
+          const waveShift = Math.sin(time * 1.4 + g.depth * 14 + g.phase) * (6 + g.depth * 20);
+
+          if (g.isStarReflection) {
+            // Destellos plateados/azulados de estrellas reflejadas en todo el mar
+            const x = g.xNorm * width + waveShift;
+            const w = g.width * (0.65 + intensity * 0.45);
+            const starRefGrad = ctx.createLinearGradient(x - w / 2, y, x + w / 2, y);
+            starRefGrad.addColorStop(0.0, 'rgba(210, 230, 255, 0)');
+            starRefGrad.addColorStop(0.5, `rgba(235, 244, 255, ${intensity * 0.62})`);
+            starRefGrad.addColorStop(1.0, 'rgba(210, 230, 255, 0)');
+
+            ctx.fillStyle = starRefGrad;
+            ctx.beginPath();
+            ctx.ellipse(x, y, w / 2, g.height, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Reflejos cálidos residuales cerca del centro del horizonte
+            if (g.depth > 0.62) continue;
+            const x = glowX + g.offsetNorm * width * g.spreadFactor + waveShift;
+            const w = g.width * (0.7 + intensity * 0.4) * (0.96 + pulse * 0.04);
+            const warmGrad = ctx.createLinearGradient(x - w / 2, y, x + w / 2, y);
+            warmGrad.addColorStop(0.0, 'rgba(245, 165, 120, 0)');
+            warmGrad.addColorStop(0.5, `rgba(255, 195, 145, ${intensity * (0.55 - g.depth * 0.55)})`);
+            warmGrad.addColorStop(1.0, 'rgba(245, 165, 120, 0)');
+
+            ctx.fillStyle = warmGrad;
+            ctx.beginPath();
+            ctx.ellipse(x, y, w / 2, g.height, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        // 5. Línea sutil del horizonte crepuscular
+        const horizonLineGrad = ctx.createLinearGradient(0, horizonY, width, horizonY);
+        horizonLineGrad.addColorStop(0.0, 'rgba(130, 65, 105, 0.20)');
+        horizonLineGrad.addColorStop(0.5, 'rgba(245, 165, 118, 0.58)');
+        horizonLineGrad.addColorStop(1.0, 'rgba(130, 65, 105, 0.20)');
+
+        ctx.strokeStyle = horizonLineGrad;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, horizonY);
+        ctx.lineTo(width, horizonY);
+        ctx.stroke();
+      }
+
+      // ==========================================================
+      // BUCLE PRINCIPAL DE ANIMACIÓN (60 FPS)
+      // ==========================================================
+      let lastTimestamp = performance.now();
+
+      function animate(now) {
+        const dt = Math.min((now - lastTimestamp) / 1000, 0.05);
+        lastTimestamp = now;
+        const time = now / 1000;
+
+        const horizonY = height * 0.67;
+        const glowX = width * 0.5;
+        const pulse = (Math.sin(time * 1.1) + 1) * 0.5;
+
+        ctx.clearRect(0, 0, width, height);
+
+        drawTwilightSky(horizonY, glowX, pulse);
+        drawStarsMoonAndMeteors(time, dt, horizonY);
+        drawClouds(dt, glowX, horizonY);
+        drawCoastalSilhouettes(horizonY);
+        drawOcean(time, horizonY, glowX, pulse);
+
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
